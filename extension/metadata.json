@@ -1,0 +1,8 @@
+{
+  "name": "TopBar Monitor",
+  "description": "Lightweight extension for real-time system monitoring with smooth, high-frequency graphs directly in the top panel.",
+  "uuid": "guivieirasi@topBarMonitor",
+  "shell-version": [
+    "46"
+  ]
+}

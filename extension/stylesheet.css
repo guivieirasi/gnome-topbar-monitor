@@ -1,0 +1,28 @@
+.system-monitor-label {
+    font-family: "JetBrains Mono", "Iosevka", "Ubuntu Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    
+    margin-left: 6px;
+    margin-right: 6px;
+}
+
+.system-monitor-ip-button {
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+.system-monitor-ip-button:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+}
+
+.system-monitor-clickable {
+    padding-left: 4px;
+    padding-right: 4px;
+    border-radius: 4px;
+}
+
+.system-monitor-clickable:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
