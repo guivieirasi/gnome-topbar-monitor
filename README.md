@@ -36,11 +36,19 @@ Rendering is handled via **Cairo** inside a custom `St.DrawingArea`, enabling sm
 
 ## Compatibility
 - **Display Server:** Works on both **Wayland** and **X11**.
-- **GNOME Version:** Tested on GNOME 46.
+- **GNOME Version:** Tested on GNOME 46+. Compatible with GNOME 46–50.
 
 ---
 
 ## Installation
+
+### Prerequisites
+
+No extra packages needed on a standard Ubuntu Desktop. If you want a GUI to manage extensions, install the Extensions app:
+
+```bash
+sudo apt install gnome-shell-extension-manager
+```
 
 ### Manual install
 
@@ -51,10 +59,14 @@ cp -r extension/* ~/.local/share/gnome-shell/extensions/guivieirasi@topBarMonito
 
 Then restart GNOME Shell:
 
-* Press `Alt + F2`
-* Type `r` and press Enter (X11 only)
+* Press `Alt + F2`, type `r` and press Enter — **X11 only**
+* Or log out and back in (Wayland)
 
-Or log out and back in (Wayland).
+Finally, enable the extension:
+
+```bash
+gnome-extensions enable guivieirasi@topBarMonitor
+```
 
 ---
 

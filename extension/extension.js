@@ -83,7 +83,8 @@ class MiniGraph {
 const SystemIndicator = GObject.registerClass(
 class SystemIndicator extends PanelMenu.Button {
     _init() {
-        super._init(0.0, 'System Monitor');
+        
+        super._init(0.0, 'System Monitor', true);
 
         this.mainBox = new St.BoxLayout({
             vertical: false,
@@ -149,6 +150,8 @@ class SystemIndicator extends PanelMenu.Button {
             style_class: labelClass
         });
 
+        cpuInner.add_child(this.tempLabel);
+
         /* ===== IP ===== */
 
         this.ipLabel = new St.Label({
@@ -169,18 +172,26 @@ class SystemIndicator extends PanelMenu.Button {
             track_hover: true
         });
 
-        this.ipButton.connect('clicked', () => this._updateIp(true));
+        this.ipButton.connect('clicked', () => {
+            const text = this.ipLabel.get_text();
+            const match = text.match(/(\d+\.\d+\.\d+\.\d+)/);
+            if (match) {
+                St.Clipboard.get_default().set_text(
+                    St.ClipboardType.CLIPBOARD, match[1]);
+                Main.notify('IP copiado!', match[1]);
+            }
+        });
 
         this.mainBox.add_child(this.ramBox);
         this.mainBox.add_child(this.cpuBox);
         this.mainBox.add_child(this.ipButton);
-        this.mainBox.add_child(this.tempLabel);
 
         this.add_child(this.mainBox);
 
         this._prevCpu = { idle: 0, total: 0 };
+        this._cancellable = new Gio.Cancellable();
 
-        this._updateIp(false);
+        this._updateIp();
 
         this._updateId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
             this._updateData();
@@ -188,60 +199,62 @@ class SystemIndicator extends PanelMenu.Button {
         });
 
         this._ipUpdateId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 3600, () => {
-            this._updateIp(false);
+            this._updateIp();
             return GLib.SOURCE_CONTINUE;
         });
     }
 
     _openSystemMonitor() {
-        const app = Gio.AppInfo.create_from_commandline(
-            'gnome-system-monitor',
-            null,
-            Gio.AppInfoCreateFlags.NONE
-        );
+        const candidates = [
+            'net.nokyan.Resources.desktop',
+            'io.github.nokse22.resources.desktop',
+            'resources.desktop',
+            'gnome-system-monitor.desktop',
+            'org.gnome.SystemMonitor.desktop',
+            'gnome-usage.desktop',
+        ];
+        for (const id of candidates) {
+            const app = Gio.DesktopAppInfo.new(id);
+            if (app) {
+                try { app.launch([], null); return; } catch (_e) {}
+            }
+        }
 
-        app.launch([], null);
+        for (const cmd of ['resources', 'gnome-system-monitor', 'gnome-usage']) {
+            if (GLib.find_program_in_path(cmd)) {
+                try { Gio.Subprocess.new([cmd], Gio.SubprocessFlags.NONE); return; } catch (_e) {}
+            }
+        }
     }
 
-    _updateIp(copyToClipboard = false) {
+    _updateIp() {
         try {
-            let routeData = readFile('/proc/net/route');
-            let foundIp = null;
+            const routeData = readFile('/proc/net/route');
+            const iface = routeData?.split('\n').slice(1)
+                .map(l => l.trim().split(/\s+/))
+                .find(p => p.length >= 8 && p[0] !== 'lo')?.[0];
 
-            if (routeData) {
-                let lines = routeData.split('\n');
-                for (let i = 1; i < lines.length; i++) {
-                    let parts = lines[i].trim().split(/\s+/);
-                    if (parts.length >= 8 && parts[0] !== 'lo') {
-                        let [ok, out] = GLib.spawn_command_line_sync(`ip -4 addr show ${parts[0]}`);
-                        if (ok) {
-                            let match = new TextDecoder('utf-8')
-                                .decode(out)
-                                .match(/inet\s+(\d+\.\d+\.\d+\.\d+)/);
-                            if (match) {
-                                foundIp = match[1];
-                                break;
-                            }
-                        }
-                    }
-                }
+            if (!iface) {
+                this.ipLabel.set_text('IP: Offline');
+                return;
             }
 
-            if (foundIp) {
-                this.ipLabel.set_text(`IP: ${foundIp}`);
-                if (copyToClipboard) {
-                    St.Clipboard.get_default().set_text(
-                        St.ClipboardType.CLIPBOARD,
-                        foundIp
-                    );
-                    Main.notify('IP copied!', foundIp);
-                }
-            } else {
-                this.ipLabel.set_text(`IP: Offline`);
-            }
+            const proc = Gio.Subprocess.new(
+                ['ip', '-4', 'addr', 'show', iface],
+                Gio.SubprocessFlags.STDOUT_PIPE
+            );
 
-        } catch (e) {
-            this.ipLabel.set_text(`IP: Erro`);
+            proc.communicate_utf8_async(null, this._cancellable, (_proc, result) => {
+                try {
+                    const [, stdout] = _proc.communicate_utf8_finish(result);
+                    const match = stdout?.match(/inet\s+(\d+\.\d+\.\d+\.\d+)/);
+                    this.ipLabel.set_text(match ? `IP: ${match[1]}` : 'IP: Offline');
+                } catch (_e) {
+                    this.ipLabel.set_text('IP: Erro');
+                }
+            });
+        } catch (_e) {
+            this.ipLabel.set_text('IP: Erro');
         }
     }
 
@@ -284,12 +297,14 @@ class SystemIndicator extends PanelMenu.Button {
         let temp = readFile('/sys/class/thermal/thermal_zone0/temp');
         if (temp) {
             this.tempLabel.set_text(
-                `Temp: ${(parseInt(temp) / 1000).toFixed(0)}°C`
+                `${(parseInt(temp) / 1000).toFixed(0)}°C`
             );
         }
     }
 
     destroy() {
+        this._cancellable.cancel();
+
         if (this._updateId)
             GLib.source_remove(this._updateId);
 
